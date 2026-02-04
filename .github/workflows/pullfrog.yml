@@ -1,0 +1,78 @@
+# PULLFROG ACTION — DO NOT EDIT EXCEPT WHERE INDICATED
+# reads branch from .branch file and builds action from that branch
+# pullfrog-sync: uses=./.pullfrog-action/action
+name: Pullfrog
+run-name: ${{ inputs.name || github.workflow }}
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        type: string
+        description: Agent prompt
+      name:
+        type: string
+        description: Run name
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+  checks: read
+
+jobs:
+  pullfrog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      # pullfrog-sync: prepare-start
+      - name: Read branch
+        id: config
+        run: |
+          if [ -f .branch ]; then
+            echo "branch=$(cat .branch)" >> $GITHUB_OUTPUT
+          else
+            echo "branch=main" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout pullfrog/app action
+        uses: actions/checkout@v6
+        with:
+          repository: pullfrog/app
+          ref: ${{ steps.config.outputs.branch }}
+          path: .pullfrog-action
+          token: ${{ secrets.GH_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Build action
+        working-directory: .pullfrog-action/action
+        run: |
+          pnpm install --frozen-lockfile --ignore-workspace
+          pnpm build
+
+      # pullfrog-sync: prepare-end
+      - name: Run agent
+        uses: ./.pullfrog-action/action
+        with:
+          prompt: ${{ inputs.prompt }}
+        env:
+          # add any additional keys your agent(s) need
+          # optionally, comment out any you won't use
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
